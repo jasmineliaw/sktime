@@ -436,7 +436,7 @@ class NaiveForecaster(_BaseWindowForecaster):
             # transform the constant into a repeated array
             if not window_length:
                 if sp > 1:
-                    y_pred = np.tile(self.predict(fh=list(range(sp))), math.ceil(T // sp))[0:T]
+                    y_pred = np.tile(self.predict(fh=list(range(sp))), math.ceil(T // sp) + sp)[0:T]
                 else:
                     y_pred = np.repeat(np.squeeze(self.predict(fh=1)), T)
             else:
