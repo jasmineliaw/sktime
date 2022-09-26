@@ -18,6 +18,7 @@ __author__ = [
 from warnings import warn
 
 import numpy as np
+import math
 import pandas as pd
 from scipy.stats import norm
 
@@ -424,13 +425,37 @@ class NaiveForecaster(_BaseWindowForecaster):
         y = convert_to(y, "pd.Series")
         T = len(y)
 
+        sp = self.sp
+        window_length = self.window_length or T
+
         # Compute "past" residuals
         if self.strategy == "last":
-            y_res = y - y.shift(self.sp)
+            y_res = y - y.shift(sp)
         elif self.strategy == "mean":
             # Since this strategy returns a constant, just predict fh=1 and
             # transform the constant into a repeated array
-            y_pred = np.repeat(np.squeeze(self.predict(fh=1)), T)
+            if not self.window_length:
+                if sp > 1:
+                    y_pred = np.tile(self.predict(fh=list(range(sp))), math.ceil(T // sp))[0:T]
+                else:
+                    y_pred = np.repeat(np.squeeze(self.predict(fh=1)), T)
+            else:
+                if sp > 1:
+                    seasons = np.mod(np.arange(T), sp)
+                    y_pred = (
+                        y.to_frame()
+                        .assign(__sp__=seasons)
+                        .groupby("__sp__")
+                        .rolling(window_length, min_periods=1)
+                        .mean()
+                        .droplevel("__sp__")
+                        .sort_index()
+                        .squeeze()
+                    )
+                else:
+                    y_pred = y.rolling(window_length, min_periods=1).mean()
+                y_pred = y_pred.shift(sp)
+
             y_res = y - y_pred
         else:
             # Slope equation from:
@@ -448,15 +473,13 @@ class NaiveForecaster(_BaseWindowForecaster):
         mse_res = np.sum(np.square(y_res)) / (T - n_nans - (self.strategy == "drift"))
         se_res = np.sqrt(mse_res)
 
-        sp = self.sp
-        window_length = self.window_length or T
         # Formulas from:
         # https://otexts.com/fpp3/prediction-intervals.html (Table 5.2)
         partial_se_formulas = {
             "last": lambda h: np.sqrt(h)
             if sp == 1
             else np.sqrt(np.floor((h - 1) / sp) + 1),
-            "mean": lambda h: np.repeat(np.sqrt(1 + (1 / window_length)), len(h)),
+            "mean": lambda h: np.repeat(np.sqrt(1 + (1 / T)), len(h)),
             "drift": lambda h: np.sqrt(h * (1 + (h / (T - 1)))),
         }
 
