@@ -426,7 +426,7 @@ class NaiveForecaster(_BaseWindowForecaster):
         T = len(y)
 
         sp = self.sp
-        window_length = self.window_length or T
+        window_length = self.window_length
 
         # Compute "past" residuals
         if self.strategy == "last":
@@ -434,7 +434,7 @@ class NaiveForecaster(_BaseWindowForecaster):
         elif self.strategy == "mean":
             # Since this strategy returns a constant, just predict fh=1 and
             # transform the constant into a repeated array
-            if not self.window_length:
+            if not window_length:
                 if sp > 1:
                     y_pred = np.tile(self.predict(fh=list(range(sp))), math.ceil(T // sp))[0:T]
                 else:
@@ -460,7 +460,7 @@ class NaiveForecaster(_BaseWindowForecaster):
         else:
             # Slope equation from:
             # https://otexts.com/fpp3/simple-methods.html#drift-method
-            slope = (y.iloc[-1] - y.iloc[0]) / (T - 1)
+            slope = (y.iloc[-1] - y.iloc[-(window_length or 0)]) / (window_length or T - 1)
 
             # Fitted value = previous value + slope
             # https://github.com/robjhyndman/forecast/blob/master/R/naive.R#L34
